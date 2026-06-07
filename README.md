@@ -2,6 +2,22 @@
 
 This repository contains implementations of nine deep learning architectures for nuclei segmentation, benchmarked on the TNBC (Triple Negative Breast Cancer) histopathology dataset. Each model is implemented as a self-contained Jupyter notebook with training, evaluation, and visualization.
 
+## Kaggle Notebooks
+
+All implementations are publicly available and reproducible on Kaggle:
+
+**Work 1:**
+- [ResNet34 Attention U-Net](https://www.kaggle.com/code/momoketchum/unet-resnet-attention-notebook)
+- [CBAM U-Net](https://www.kaggle.com/code/momoketchum/cbam-unet)
+- [SA U-Net (Spatial Attention)](https://www.kaggle.com/code/momoketchum/unet-spatial-attention)
+- [EViT-UNet](https://www.kaggle.com/code/momoketchum/evit-unet)
+
+**Work 2:**
+- [Base U-Net](https://www.kaggle.com/code/soumyajitghosh1729/unet-base)
+- [SE-UNet](https://www.kaggle.com/code/soumyajitghosh1729/se-unet)
+- [DA-UNet](https://www.kaggle.com/code/soumyajitghosh1729/daunet)
+- [TransRes-UNet](https://www.kaggle.com/code/soumyajitghosh1729/transres-unet)
+
 ## Dataset
 
 All models are trained and evaluated on the **MoNuSeg / TNBC** nuclei segmentation dataset, available on Kaggle:
@@ -238,3 +254,5 @@ Each notebook is self-contained and includes: model architecture definition, dat
 8. S. Iyer et al., "Squeeze Excitation Embedded Attention UNet for Brain Tumor Segmentation," arXiv:2305.07850, 2023. [arXiv:2305.07850](https://arxiv.org/abs/2305.07850)
 9. S. Ghosh et al., "DAUNet: A Lightweight UNet Variant with Deformable Convolutions and Parameter-Free Attention for Medical Image Segmentation," arXiv:2512.07051, 2024. [arXiv:2512.07051](https://arxiv.org/abs/2512.07051)
 10. J. Chen et al., "TransUNet: Transformers Make Strong Encoders for Medical Image Segmentation," arXiv:2102.04306, 2021. [arXiv:2102.04306](https://arxiv.org/abs/2102.04306)
+11. TransUNet Official Implementation: [Beckschen/TransUNet](https://github.com/beckschen/transunet)
+12. TNBC ImageMask Dataset Repository: [Sarah-Antillia/ImageMask-Dataset-Triple-Negative-Breast-Cancer](https://github.com/sarah-antillia/ImageMask-Dataset-Triple-Negative-Breast-Cancer)
