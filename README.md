@@ -1,6 +1,6 @@
 # Nuclei Segmentation on TNBC Histopathology — A Comparative Study of U-Net Variants
 
-This repository contains implementations of five deep learning architectures for nuclei segmentation, benchmarked on the TNBC (Triple Negative Breast Cancer) histopathology dataset. Each model is implemented as a self-contained Jupyter notebook with training, evaluation, and visualization.
+This repository contains implementations of nine deep learning architectures for nuclei segmentation, benchmarked on the TNBC (Triple Negative Breast Cancer) histopathology dataset. Each model is implemented as a self-contained Jupyter notebook with training, evaluation, and visualization.
 
 ## Dataset
 
@@ -31,6 +31,17 @@ The images are H&E-stained histopathology slides with corresponding binary segme
 | EViT-UNet | 0.7040 | 0.6072 | 0.6782 | 0.7451 | 28.35 | 25 |
 
 **Note on training duration:** The models were not trained for an equal number of epochs. The Attention U-Net (50 epochs) had the most training time, while CBAM U-Net (15), SA U-Net (10), and ResNet34 Attention U-Net (10) were stopped early. All models with fewer epochs were still showing improvement in their validation curves at the time training was halted — their reported metrics represent a lower bound on what these architectures can achieve. A fair comparison would require training all models to convergence with the same epoch budget and scheduler.
+
+### Work 2: Architectures
+
+| Model | Dice (F1) | IoU | Precision | Recall | HD (px) | Params | Epochs Trained |
+|:------|:---------:|:---:|:---------:|:------:|:-------:|:------:|:--------------:|
+| SE-UNet | **0.8350** | **0.7257** | 0.8482 | 0.8268 | **53.67** | 75M | 12 |
+| TransRes-UNet | 0.8337 | 0.7225 | **0.8559** | 0.8179 | 80.94 | 110M | 12 (10+2) |
+| Base U-Net | 0.8303 | 0.7195 | 0.8391 | **0.8284** | 70.90 | 31M | 10 |
+| DA-UNet | 0.7614 | 0.6222 | 0.8311 | 0.7108 | 77.54 | **21M** | 10 |
+
+**Note on HD metric:** The Hausdorff Distance reported above is the full (max) directed Hausdorff distance in pixels, computed using `scipy.spatial.distance.directed_hausdorff`. This differs from the HD95 (95th percentile) reported in the table above. The values are not directly comparable across the two tables. All four models were trained on 640×640 crops with batch size 6 (TransRes-UNet: batch size 2 with gradient accumulation × 4, simulating effective batch 8). TransRes-UNet used a 10-epoch frozen backbone phase followed by 2 epochs of full fine-tuning at 10× reduced learning rate.
 
 ---
 
@@ -85,6 +96,49 @@ Hybrid CNN-Transformer architecture based on EfficientFormer. The encoder uses c
 
 ---
 
+## Work 2: Architectures
+
+### 6. Base U-Net (`unet-base.ipynb`)
+
+Vanilla U-Net reimplemented from scratch with a 4-level encoder-decoder and transposed convolution upsampling. Serves as the baseline for comparing all attention and hybrid variants in this work. Each encoder block consists of two Conv-BN-ReLU operations followed by MaxPooling; the decoder mirrors this with skip concatenation.
+
+- **Skip mechanism:** Standard concatenation
+- **Parameters:** ~31M
+- **Input resolution:** 640 x 640
+- **Reference:** Ronneberger et al., "U-Net: Convolutional Networks for Biomedical Image Segmentation," MICCAI, 2015. [arXiv:1505.04597](https://arxiv.org/abs/1505.04597)
+
+### 7. SE-UNet (`se-unet.ipynb`)
+
+U-Net with Squeeze-and-Excitation (SE) blocks embedded into both the encoder and decoder paths. After each convolutional block, global average pooling produces a channel descriptor, which is recalibrated through a two-layer FC bottleneck (reduction ratio applied) and multiplied back as channel-wise attention weights. A dilated convolution bottleneck replaces the standard bridge. SE blocks are also applied in the decoder upsampling path (`UNetDec`).
+
+- **Skip mechanism:** Standard concatenation (SE recalibration within encoder/decoder blocks)
+- **Parameters:** ~75M
+- **Input resolution:** 640 x 640
+- **Reference:** Iyer et al., "Squeeze Excitation Embedded Attention UNet for Brain Tumor Segmentation," arXiv:2305.07850, 2023. [arXiv:2305.07850](https://arxiv.org/abs/2305.07850)
+
+### 8. DA-UNet (`daunet.ipynb`)
+
+A lightweight U-Net variant combining two novel components: **Deformable V2 Convolutions** in the bottleneck (using a learned offset field + modulator to dynamically adapt the sampling grid to irregular nucleus shapes) and **SimAM** (Simple, Parameter-Free Attention Module) applied to all four skip connections. SimAM computes a 3D neuron importance score from feature statistics without adding any learnable parameters. The bottleneck uses a Conv→Deformable Conv→Conv structure with channel bottleneck compression.
+
+- **Skip mechanism:** SimAM attention on skip connections (parameter-free)
+- **Bottleneck:** Deformable V2 Conv (3×3 kernel) with channel compression (÷4)
+- **Parameters:** ~21M (lightest model in this study)
+- **Input resolution:** 640 x 640
+- **Reference:** Ghosh et al., "DAUNet: A Lightweight UNet Variant with Deformable Convolutions and Parameter-Free Attention for Medical Image Segmentation," arXiv:2512.07051, 2024. [arXiv:2512.07051](https://arxiv.org/abs/2512.07051)
+
+### 9. TransRes-UNet (`transres-unet.ipynb`)
+
+Hybrid CNN-Transformer architecture combining a ResNet-50 backbone and ViT-B/16 encoder with a residual U-Net decoder. The ResNet-50 extracts multi-scale feature maps that serve as skip connections, while the final feature map is tokenized into patches and processed by a 12-layer Transformer (hidden size 768, 12 heads). The decoder uses `ResDecoderBlock`s (transposed conv + residual double conv) to progressively upsample and fuse features. The pretrained `R50+ViT-B_16.npz` weights were loaded for the encoder. Training used a **hybrid frozen/unfrozen strategy**: the backbone was frozen for 10 epochs (decoder only), then fully unfrozen for 2 epochs at 10× reduced LR. Mixed Precision (AMP) and gradient accumulation (×4 steps, effective batch 8) were used to manage the ~110M parameter model on 2× T4 GPUs.
+
+- **Skip mechanism:** Residual decoder with ResNet skip connections
+- **Parameters:** ~110M
+- **Input resolution:** 640 x 640
+- **Pretrained:** R50+ViT-B/16 (ImageNet-21k)
+- **Multi-GPU:** DataParallel across 2x T4 GPUs; AMP + gradient accumulation (steps=4)
+- **Reference:** Chen et al., "TransUNet: Transformers Make Strong Encoders for Medical Image Segmentation," arXiv:2102.04306, 2021. [arXiv:2102.04306](https://arxiv.org/abs/2102.04306)
+
+---
+
 ## Training Setup
 
 All models share the following configuration unless noted otherwise:
@@ -104,6 +158,10 @@ All models share the following configuration unless noted otherwise:
 | SA U-Net | ReduceLROnPlateau | 10 | 572 | 1x T4 |
 | ResNet34 Attn U-Net | ReduceLROnPlateau | 10 | 572 | 1x T4 |
 | EViT-UNet | CosineAnnealingLR | 25 | 224 | 2x T4 |
+| Base U-Net | ReduceLROnPlateau | 10 | 640 | 1x T4 |
+| SE-UNet | ReduceLROnPlateau | 12 | 640 | 1x T4 |
+| DA-UNet | ReduceLROnPlateau | 10 | 640 | 1x T4 |
+| TransRes-UNet | ReduceLROnPlateau | 12 (10 frozen + 2 unfrozen) | 640 | 2x T4 + AMP |
 
 ---
 
@@ -130,6 +188,9 @@ The hybrid CNN-Transformer architecture was trained from scratch without pretrai
 | Spatial Attention | Spatial features | Within blocks |
 | CCA | Channel cross-correlation | Skip connections |
 | Self-Attention (4D) | Global pixel relationships | Deep encoder/decoder stages |
+| SE Block | Channel recalibration | Within encoder/decoder blocks |
+| SimAM | Parameter-free 3D neuron score | Skip connections |
+| Deformable Conv | Adaptive spatial sampling | Bottleneck |
 
 ---
 
@@ -154,6 +215,10 @@ The hybrid CNN-Transformer architecture was trained from scratch without pretrai
 ├── unet-spatial-attention.ipynb          # SA U-Net
 ├── unet-resnet-attention-notebook.ipynb  # ResNet34 Attention U-Net
 ├── evit-unet.ipynb                       # EViT-UNet
+├── unet-base.ipynb                       # Base U-Net (this work)
+├── se-unet.ipynb                         # SE-UNet (this work)
+├── daunet.ipynb                          # DA-UNet (this work)
+├── transres-unet.ipynb                   # TransRes-UNet (this work)
 └── README.md
 ```
 
@@ -163,10 +228,13 @@ Each notebook is self-contained and includes: model architecture definition, dat
 
 ## References
 
-1. O. Ronneberger, P. Fischer, and T. Brox, "U-Net: Convolutional Networks for Biomedical Image Segmentation," MICCAI, 2015.
+1. O. Ronneberger, P. Fischer, and T. Brox, "U-Net: Convolutional Networks for Biomedical Image Segmentation," MICCAI, 2015. [arXiv:1505.04597](https://arxiv.org/abs/1505.04597)
 2. O. Oktay et al., "Attention U-Net: Learning Where to Look for the Pancreas," MIDL, 2018.
 3. S. Woo, J. Park, J.-Y. Lee, and I. S. Kweon, "CBAM: Convolutional Block Attention Module," ECCV, 2018.
 4. C. Guo et al., "SA-UNet: Spatial Attention U-Net for Retinal Vessel Segmentation," ICPR, 2021.
 5. K. He, X. Zhang, S. Ren, and J. Sun, "Deep Residual Learning for Image Recognition," CVPR, 2016.
 6. X. Li, W. Zhu, X. Dong, O. M. Dumitrascu, and Y. Wang, "EViT-UNet: U-Net Like Efficient Vision Transformer for Medical Image Segmentation on Mobile and Edge Devices," arXiv:2410.15036, 2024.
 7. Y. Li et al., "EfficientFormerV2: Rethinking Vision Transformers for MobileNet Size and Speed," ICCV, 2023.
+8. S. Iyer et al., "Squeeze Excitation Embedded Attention UNet for Brain Tumor Segmentation," arXiv:2305.07850, 2023. [arXiv:2305.07850](https://arxiv.org/abs/2305.07850)
+9. S. Ghosh et al., "DAUNet: A Lightweight UNet Variant with Deformable Convolutions and Parameter-Free Attention for Medical Image Segmentation," arXiv:2512.07051, 2024. [arXiv:2512.07051](https://arxiv.org/abs/2512.07051)
+10. J. Chen et al., "TransUNet: Transformers Make Strong Encoders for Medical Image Segmentation," arXiv:2102.04306, 2021. [arXiv:2102.04306](https://arxiv.org/abs/2102.04306)
